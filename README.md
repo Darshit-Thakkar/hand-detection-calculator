@@ -1,0 +1,3 @@
+My project, "Hand Detection Calculator," is designed to recognize hand gestures and perform arithmetic operations based on the number of fingers detected. The model can identify fingers and execute addition, subtraction, multiplication, division, or no operation accordingly. To enhance user experience, I have integrated a dark mode option and a voice recognition feature that audibly announces both the question and the answer.  
+<br>
+After clicking the submit button, the system activates hand detection for a duration of 2 seconds, after which the detection process automatically stops. This ensures quick and efficient processing without unnecessary delays. The combination of gesture-based input and voice feedback makes the calculator both interactive and accessible.
