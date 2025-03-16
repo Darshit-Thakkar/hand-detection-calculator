@@ -49,6 +49,8 @@ def toggle_dark_mode():
     history_label.config(bg=bg_color, fg=fg_color)
     finger_count_label.config(bg=bg_color, fg=fg_color)
     toggle_mode_button.config(text="Light Mode" if dark_mode else "Dark Mode")
+    finger_operations_label.config(bg=bg_color, fg=fg_color)
+    finger_operations_text.config(bg=bg_color, fg=fg_color)
 
 # Left Panel - Number Entry & Operations
 left_panel = tk.Frame(root, width=400, height=600, bg="lightgray")
@@ -192,6 +194,18 @@ def hand_detection():
     video_label.img = img
     video_label.config(image=img)
     video_label.after(10, hand_detection)
+
+# Add Finger Operation List
+finger_operations_label = tk.Label(left_panel, text="Finger Count Operations:", font=("Helvetica", 12, "bold"), bg="lightgray")
+finger_operations_label.pack()
+
+finger_operations_text = tk.Label(left_panel, text=(
+    "1 Finger  → Addition (+)\n"
+    "2 Fingers → Subtraction (-)\n"
+    "3 Fingers → Multiplication (×)\n"
+    "4 Fingers → Division (÷)\n"
+), bg="lightgray", font=("Helvetica", 10), justify="left")
+finger_operations_text.pack()
 
 def quit_app():
     root.quit()
