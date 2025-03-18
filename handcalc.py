@@ -139,7 +139,7 @@ def hand_detection():
 
                 fingers = []
 
-                # Thumb detection fix (for left and right hand)
+                # Thumb 
                 if hand_type == "Right":
                     if hand_landmarks.landmark[tipIds[0]].x < hand_landmarks.landmark[tipIds[0] - 1].x:
                         fingers.append(1)
