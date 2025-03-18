@@ -6,18 +6,18 @@ import time
 import sys
 import pyttsx3
 
-# Store operation records
+# variable
 operation_records = []
 num1, num2 = 0, 0
 detection_active = False  
 detection_done = False  
 detection_start_time = None  
 
-# Initialize OpenCV capture
+
 wCam, hCam = 640, 490
 cap = cv.VideoCapture(0)
-cap.set(cv.CAP_PROP_FRAME_WIDTH, wCam)
-cap.set(cv.CAP_PROP_FRAME_HEIGHT, hCam)
+cap.set(cv.CAP_PROP_FRAME_WIDTH, wCam) # 3 
+cap.set(cv.CAP_PROP_FRAME_HEIGHT, hCam) # 4
 
 # Initialize Mediapipe Hand Detector
 mp_hands = mp.solutions.hands
