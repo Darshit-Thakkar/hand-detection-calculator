@@ -1,4 +1,0 @@
-
-Subtraction: 22 - 3 = 19
-Subtraction: 52 - 63 = -11
-Addition: 52 + 63 = 115

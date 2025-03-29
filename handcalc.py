@@ -5,19 +5,21 @@ from PIL import Image, ImageTk
 import time
 import sys
 import pyttsx3
+import pyautogui
+import numpy as np
 
-# variable
+# Store operation records
 operation_records = []
 num1, num2 = 0, 0
-detection_active = False  
-detection_done = False  
-detection_start_time = None  
+detection_active = False
+detection_done = False
+detection_start_time = None
 
-
+# Initialize OpenCV capture
 wCam, hCam = 640, 490
 cap = cv.VideoCapture(0)
-cap.set(cv.CAP_PROP_FRAME_WIDTH, wCam) # 3 
-cap.set(cv.CAP_PROP_FRAME_HEIGHT, hCam) # 4
+cap.set(cv.CAP_PROP_FRAME_WIDTH, wCam) #3
+cap.set(cv.CAP_PROP_FRAME_HEIGHT, hCam) #4
 
 # Initialize Mediapipe Hand Detector
 mp_hands = mp.solutions.hands
@@ -30,9 +32,14 @@ tipIds = [4, 8, 12, 16, 20]
 # Initialize Text-to-Speech engine
 engine = pyttsx3.init()
 
+# Variables for cursor control
+screen_width, screen_height = pyautogui.size()
+prev_index_x, prev_index_y = 0, 0
+smooth_factor = 3
+
 # Create the main Tkinter window
 root = tk.Tk()
-root.title("Hand Detection & Number Entry Panel")
+root.title("Hand Gesture Calculator & Mouse Control")
 root.geometry("1000x600")
 
 # Dark mode toggle state
@@ -107,9 +114,48 @@ video_label.pack()
 finger_count_label = tk.Label(right_panel, text="Please click Submit to start detection", font=("Helvetica", 14))
 finger_count_label.pack()
 
+# Number Pad Frame (Bottom Right)
+numpad_frame = tk.Frame(right_panel)
+numpad_frame.pack(side=tk.BOTTOM, pady=10)
+
+def insert_number(num):
+    if entry1.focus_get() == entry1:
+        entry1.insert(tk.END, num)
+    elif entry2.focus_get() == entry2:
+        entry2.insert(tk.END, num)
+    else:
+        entry1.focus_set()
+        entry1.insert(tk.END, num)
+
+def clear_all():
+    entry1.delete(0, tk.END)
+    entry2.delete(0, tk.END)
+    entry1.focus_set()
+
+def erase_one():
+    if entry1.focus_get() == entry1:
+        if len(entry1.get()) > 0:
+            entry1.delete(len(entry1.get())-1, tk.END)
+    elif entry2.focus_get() == entry2:
+        if len(entry2.get()) > 0:
+            entry2.delete(len(entry2.get())-1, tk.END)
+
+# Create number buttons
+for i in range(10):
+    btn = tk.Button(numpad_frame, text=str(i), width=5, height=2, command=lambda n=i: insert_number(n))
+    btn.grid(row=(i-1)//3 if i!=0 else 3, column=(i-1)%3 if i!=0 else 1, padx=5, pady=5)
+
+# Add Clear and Erase buttons
+clear_btn = tk.Button(numpad_frame, text="AC", width=5, height=2, command=clear_all, bg="red", fg="white")
+clear_btn.grid(row=3, column=0, padx=5, pady=5)
+
+erase_btn = tk.Button(numpad_frame, text="⌫", width=5, height=2, command=erase_one, bg="orange")
+erase_btn.grid(row=3, column=2, padx=5, pady=5)
+
 def hand_detection():
-    """Detects the number of fingers and performs arithmetic operations."""
+    """Detects hand gestures for calculator operations and mouse control."""
     global num1, num2, detection_active, detection_done, detection_start_time
+    global prev_index_x, prev_index_y
 
     success, img = cap.read()
     if not success:
@@ -117,80 +163,114 @@ def hand_detection():
 
     img = cv.flip(img, 1)  # Flip for mirror effect
     rgb_frame = cv.cvtColor(img, cv.COLOR_BGR2RGB)
+    frame_height, frame_width, _ = img.shape
 
     # Detect hands
     result = hands.process(rgb_frame)
+    totalFingers = 0
 
-    totalFingers = 0  
+    if result.multi_hand_landmarks:
+        # When both hands are detected, only use right hand for cursor control
+        right_hand_idx = None
+        if len(result.multi_hand_landmarks) > 1:
+            for idx, handedness in enumerate(result.multi_handedness):
+                if handedness.classification[0].label == "Right":
+                    right_hand_idx = idx
+                    break
+        
+        for idx, hand_landmarks in enumerate(result.multi_hand_landmarks):
+            mp_drawing.draw_landmarks(img, hand_landmarks, mp_hands.HAND_CONNECTIONS)
+            
+            # Mouse control using index finger - only for right hand when both hands present
+            if len(result.multi_hand_landmarks) == 1 or (right_hand_idx is not None and idx == right_hand_idx):
+                index_finger = hand_landmarks.landmark[8]
+                thumb_finger = hand_landmarks.landmark[4]
+                
+                index_x = int(index_finger.x * frame_width)
+                index_y = int(index_finger.y * frame_height)
+                thumb_x = int(thumb_finger.x * frame_width)
+                thumb_y = int(thumb_finger.y * frame_height)
 
-    if detection_active and detection_start_time is not None and not detection_done:
-        elapsed_time = time.time() - detection_start_time
+                # Draw markers
+                cv.circle(img, (index_x, index_y), 10, (0, 255, 0), -1)
+                cv.circle(img, (thumb_x, thumb_y), 10, (0, 0, 255), -1)
 
-        if elapsed_time >= 2:  
-            detection_active = False
-            detection_done = True  
-            finger_count_label.config(text="Please click Submit to continue")  
-            print("Detection stopped after 2 seconds.")
+                # Mouse movement
+                screen_x = np.interp(index_x, (0, frame_width), (0, screen_width))
+                screen_y = np.interp(index_y, (0, frame_height), (0, screen_height))
+                
+                curr_index_x = (prev_index_x * (smooth_factor - 1) + screen_x) / smooth_factor
+                curr_index_y = (prev_index_y * (smooth_factor - 1) + screen_y) / smooth_factor
+                
+                pyautogui.moveTo(curr_index_x, curr_index_y, duration=0.1)
+                prev_index_x, prev_index_y = curr_index_x, curr_index_y
 
-        if result.multi_hand_landmarks:
-            for idx, hand_landmarks in enumerate(result.multi_hand_landmarks):
-                # Identify Left or Right Hand
-                hand_type = result.multi_handedness[idx].classification[0].label  # 'Left' or 'Right'
+                # Click detection
+                distance = np.hypot(thumb_x - index_x, thumb_y - index_y)
+                if distance < 20:  # Increased threshold for better detection
+                    pyautogui.click()
+                    time.sleep(0.3)  # Delay to prevent multiple clicks
 
-                fingers = []
+            # Detect fist gesture for clear all
+            fingers = []
+            # Thumb detection
+            hand_type = result.multi_handedness[idx].classification[0].label
+            if hand_type == "Right":
+                fingers.append(1 if hand_landmarks.landmark[tipIds[0]].x < hand_landmarks.landmark[tipIds[0] - 1].x else 0)
+            else:
+                fingers.append(1 if hand_landmarks.landmark[tipIds[0]].x > hand_landmarks.landmark[tipIds[0] - 1].x else 0)
 
-                # Thumb 
-                if hand_type == "Right":
-                    if hand_landmarks.landmark[tipIds[0]].x < hand_landmarks.landmark[tipIds[0] - 1].x:
-                        fingers.append(1)
-                    else:
-                        fingers.append(0)
-                else:  
-                    if hand_landmarks.landmark[tipIds[0]].x > hand_landmarks.landmark[tipIds[0] - 1].x:
-                        fingers.append(1)
-                    else:
-                        fingers.append(0)
+            # Other fingers detection
+            for id in range(1, 5):
+                fingers.append(1 if hand_landmarks.landmark[tipIds[id]].y < hand_landmarks.landmark[tipIds[id] - 2].y else 0)
 
-                # Other four fingers detection
-                for id in range(1, 5):
-                    if hand_landmarks.landmark[tipIds[id]].y < hand_landmarks.landmark[tipIds[id] - 2].y:
-                        fingers.append(1)
-                    else:
-                        fingers.append(0)
+            # If all fingers are closed (fist), clear all
+            if sum(fingers) == 0:
+                clear_all()
+                time.sleep(0.5)  # Delay to prevent multiple clears
 
+            if detection_active and not detection_done:
                 totalFingers = fingers.count(1)
                 cv.putText(img, f"Fingers: {totalFingers}", (10, 70), cv.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 0), 2)
                 finger_count_label.config(text=f"Fingers Detected: {totalFingers}")
 
-                # Perform arithmetic operation
-                operation = "No operation performed."
-                result_value = None
+    # Calculator operation logic
+    if detection_active and detection_start_time is not None and not detection_done:
+        elapsed_time = time.time() - detection_start_time
 
-                if totalFingers == 1:
-                    result_value = num1 + num2
-                    operation = f"Addition: {num1} + {num2} = {result_value}"
-                elif totalFingers == 2:
-                    result_value = num1 - num2
-                    operation = f"Subtraction: {num1} - {num2} = {result_value}"
-                elif totalFingers == 3:
-                    result_value = num1 * num2
-                    operation = f"Multiplication: {num1} * {num2} = {result_value}"
-                elif totalFingers == 4:
-                    if num2 != 0:
-                        result_value = num1 / num2
-                        operation = f"Division: {num1} / {num2} = {result_value}"
-                    else:
-                        operation = "Division by zero is not allowed."
+        if elapsed_time >= 2:
+            detection_active = False
+            detection_done = True
+            finger_count_label.config(text="Please click Submit to continue")
+            
+            # Perform arithmetic operation
+            operation = "No operation performed."
+            result_value = None
 
-                if detection_done:
-                    print(operation)
-                    update_history(operation)
-                    engine.say(operation)
-                    engine.runAndWait()
-    
+            if totalFingers == 1:
+                result_value = num1 + num2
+                operation = f"Addition: {num1} + {num2} = {result_value}"
+            elif totalFingers == 2:
+                result_value = num1 - num2
+                operation = f"Subtraction: {num1} - {num2} = {result_value}"
+            elif totalFingers == 3:
+                result_value = num1 * num2
+                operation = f"Multiplication: {num1} * {num2} = {result_value}"
+            elif totalFingers == 4:
+                if num2 != 0:
+                    result_value = round(num1 / num2, 2)  # Round to 2 decimal places
+                    operation = f"Division: {num1} / {num2} = {result_value}"
+                else:
+                    operation = "Division by zero is not allowed."
+
+            print(operation)
+            update_history(operation)
+            engine.say(operation)
+            engine.runAndWait()
+
+    # Update display
     img = Image.fromarray(rgb_frame)
     img = ImageTk.PhotoImage(image=img)
-
     video_label.img = img
     video_label.config(image=img)
     video_label.after(10, hand_detection)
@@ -204,6 +284,7 @@ finger_operations_text = tk.Label(left_panel, text=(
     "2 Fingers → Subtraction (-)\n"
     "3 Fingers → Multiplication (×)\n"
     "4 Fingers → Division (÷)\n"
+    "Fist      → Clear All\n"
 ), bg="lightgray", font=("Helvetica", 10), justify="left")
 finger_operations_text.pack()
 
