@@ -7,6 +7,7 @@ import sys
 import pyttsx3
 import pyautogui
 import numpy as np
+import mysql.connector
 
 # Store operation records
 operation_records = []
@@ -15,11 +16,33 @@ detection_active = False
 detection_done = False
 detection_start_time = None
 
+# Initialize MySQL connection
+try:
+    db = mysql.connector.connect(
+        host="localhost",
+        user="root", 
+        password="",
+        database="hand_calculator"
+    )
+    cursor = db.cursor()
+    # Create table if not exists
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS task_history (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            operation VARCHAR(255),
+            timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+    db.commit()
+except mysql.connector.Error as err:
+    print(f"Error connecting to MySQL: {err}")
+    db = None
+
 # Initialize OpenCV capture
 wCam, hCam = 640, 490
 cap = cv.VideoCapture(0)
-cap.set(cv.CAP_PROP_FRAME_WIDTH, wCam) #3
-cap.set(cv.CAP_PROP_FRAME_HEIGHT, hCam) #4
+cap.set(cv.CAP_PROP_FRAME_WIDTH, wCam)
+cap.set(cv.CAP_PROP_FRAME_HEIGHT, hCam)
 
 # Initialize Mediapipe Hand Detector
 mp_hands = mp.solutions.hands
@@ -79,12 +102,23 @@ history_text = tk.Text(left_panel, height=10, width=40)
 history_text.pack()
 
 def update_history(new_record):
-    """Updates the history panel and saves the record to a file."""
+    """Updates the history panel and saves the record to database and file."""
     if new_record not in operation_records:  # Prevent duplicates
         operation_records.append(new_record)  
-        history_text.insert(tk.END, new_record + "\n")  
+        history_text.insert(tk.END, new_record + "\n")
+        
+        # Save to file
         with open("task_history.txt", "a") as file:
             file.write(new_record + "\n")
+            
+        # Save to database
+        if db is not None:
+            try:
+                sql = "INSERT INTO task_history (operation) VALUES (%s)"
+                cursor.execute(sql, (new_record,))
+                db.commit()
+            except mysql.connector.Error as err:
+                print(f"Error inserting into database: {err}")
 
 def submit_numbers():
     """Gets numbers from the entry fields and starts detection."""
@@ -131,6 +165,20 @@ def clear_all():
     entry1.delete(0, tk.END)
     entry2.delete(0, tk.END)
     entry1.focus_set()
+    history_text.delete(1.0, tk.END)  # Clear history display
+    operation_records.clear()  # Clear operation records list
+    
+    # Clear file history
+    open("task_history.txt", "w").close()
+    
+    # Clear database records
+    if db is not None:
+        try:
+            cursor.execute("DELETE FROM task_history")
+            db.commit()
+            print("Database records cleared successfully")
+        except mysql.connector.Error as err:
+            print(f"Error clearing database records: {err}")
 
 def erase_one():
     if entry1.focus_get() == entry1:
@@ -289,6 +337,9 @@ finger_operations_text = tk.Label(left_panel, text=(
 finger_operations_text.pack()
 
 def quit_app():
+    if db is not None:
+        cursor.close()
+        db.close()
     root.quit()
     cap.release()
     cv.destroyAllWindows()
