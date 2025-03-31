@@ -9,14 +9,12 @@ import pyautogui
 import numpy as np
 import mysql.connector
 
-# Store operation records
 operation_records = []
 num1, num2 = 0, 0
 detection_active = False
 detection_done = False
 detection_start_time = None
 
-# Initialize MySQL connection
 try:
     db = mysql.connector.connect(
         host="localhost",
@@ -25,7 +23,6 @@ try:
         database="hand_calculator"
     )
     cursor = db.cursor()
-    # Create table if not exists
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS task_history (
             id INT AUTO_INCREMENT PRIMARY KEY,
@@ -38,34 +35,27 @@ except mysql.connector.Error as err:
     print(f"Error connecting to MySQL: {err}")
     db = None
 
-# Initialize OpenCV capture
 wCam, hCam = 640, 490
 cap = cv.VideoCapture(0)
 cap.set(cv.CAP_PROP_FRAME_WIDTH, wCam)
 cap.set(cv.CAP_PROP_FRAME_HEIGHT, hCam)
 
-# Initialize Mediapipe Hand Detector
 mp_hands = mp.solutions.hands
 mp_drawing = mp.solutions.drawing_utils
 hands = mp_hands.Hands(min_detection_confidence=0.85, min_tracking_confidence=0.85, max_num_hands=2)
 
-# Finger landmark indexes
 tipIds = [4, 8, 12, 16, 20]
 
-# Initialize Text-to-Speech engine
 engine = pyttsx3.init()
 
-# Variables for cursor control
 screen_width, screen_height = pyautogui.size()
 prev_index_x, prev_index_y = 0, 0
 smooth_factor = 3
 
-# Create the main Tkinter window
 root = tk.Tk()
 root.title("Hand Gesture Calculator & Mouse Control")
 root.geometry("1000x600")
 
-# Dark mode toggle state
 dark_mode = False
 
 def toggle_dark_mode():
@@ -82,7 +72,6 @@ def toggle_dark_mode():
     finger_operations_label.config(bg=bg_color, fg=fg_color)
     finger_operations_text.config(bg=bg_color, fg=fg_color)
 
-# Left Panel - Number Entry & Operations
 left_panel = tk.Frame(root, width=400, height=600, bg="lightgray")
 left_panel.pack(side=tk.LEFT, fill=tk.Y)
 
@@ -94,7 +83,6 @@ tk.Label(left_panel, text="Enter Second Number:", bg="lightgray").pack()
 entry2 = tk.Entry(left_panel)
 entry2.pack()
 
-# Display operation history
 history_label = tk.Label(left_panel, text="Task History:", bg="lightgray", font=("Helvetica", 12))
 history_label.pack()
 
@@ -102,16 +90,13 @@ history_text = tk.Text(left_panel, height=10, width=40)
 history_text.pack()
 
 def update_history(new_record):
-    """Updates the history panel and saves the record to database and file."""
-    if new_record not in operation_records:  # Prevent duplicates
+    if new_record not in operation_records:
         operation_records.append(new_record)  
         history_text.insert(tk.END, new_record + "\n")
         
-        # Save to file
         with open("task_history.txt", "a") as file:
             file.write(new_record + "\n")
             
-        # Save to database
         if db is not None:
             try:
                 sql = "INSERT INTO task_history (operation) VALUES (%s)"
@@ -121,7 +106,6 @@ def update_history(new_record):
                 print(f"Error inserting into database: {err}")
 
 def submit_numbers():
-    """Gets numbers from the entry fields and starts detection."""
     global num1, num2, detection_active, detection_start_time, detection_done
     try:
         num1 = int(entry1.get())
@@ -138,7 +122,6 @@ def submit_numbers():
 submit_button = tk.Button(left_panel, text="Submit", command=submit_numbers)
 submit_button.pack()
 
-# Right Panel - Hand Detection Display
 right_panel = tk.Frame(root, width=600, height=600)
 right_panel.pack(side=tk.RIGHT, fill=tk.BOTH, expand=True)
 
@@ -148,7 +131,6 @@ video_label.pack()
 finger_count_label = tk.Label(right_panel, text="Please click Submit to start detection", font=("Helvetica", 14))
 finger_count_label.pack()
 
-# Number Pad Frame (Bottom Right)
 numpad_frame = tk.Frame(right_panel)
 numpad_frame.pack(side=tk.BOTTOM, pady=10)
 
@@ -165,13 +147,11 @@ def clear_all():
     entry1.delete(0, tk.END)
     entry2.delete(0, tk.END)
     entry1.focus_set()
-    history_text.delete(1.0, tk.END)  # Clear history display
-    operation_records.clear()  # Clear operation records list
+    history_text.delete(1.0, tk.END)
+    operation_records.clear()
     
-    # Clear file history
     open("task_history.txt", "w").close()
     
-    # Clear database records
     if db is not None:
         try:
             cursor.execute("DELETE FROM task_history")
@@ -188,12 +168,10 @@ def erase_one():
         if len(entry2.get()) > 0:
             entry2.delete(len(entry2.get())-1, tk.END)
 
-# Create number buttons
 for i in range(10):
     btn = tk.Button(numpad_frame, text=str(i), width=5, height=2, command=lambda n=i: insert_number(n))
     btn.grid(row=(i-1)//3 if i!=0 else 3, column=(i-1)%3 if i!=0 else 1, padx=5, pady=5)
 
-# Add Clear and Erase buttons
 clear_btn = tk.Button(numpad_frame, text="AC", width=5, height=2, command=clear_all, bg="red", fg="white")
 clear_btn.grid(row=3, column=0, padx=5, pady=5)
 
@@ -201,7 +179,6 @@ erase_btn = tk.Button(numpad_frame, text="⌫", width=5, height=2, command=erase
 erase_btn.grid(row=3, column=2, padx=5, pady=5)
 
 def hand_detection():
-    """Detects hand gestures for calculator operations and mouse control."""
     global num1, num2, detection_active, detection_done, detection_start_time
     global prev_index_x, prev_index_y
 
@@ -209,16 +186,14 @@ def hand_detection():
     if not success:
         return
 
-    img = cv.flip(img, 1)  # Flip for mirror effect
+    img = cv.flip(img, 1)
     rgb_frame = cv.cvtColor(img, cv.COLOR_BGR2RGB)
     frame_height, frame_width, _ = img.shape
 
-    # Detect hands
     result = hands.process(rgb_frame)
     totalFingers = 0
 
     if result.multi_hand_landmarks:
-        # When both hands are detected, only use right hand for cursor control
         right_hand_idx = None
         if len(result.multi_hand_landmarks) > 1:
             for idx, handedness in enumerate(result.multi_handedness):
@@ -229,7 +204,6 @@ def hand_detection():
         for idx, hand_landmarks in enumerate(result.multi_hand_landmarks):
             mp_drawing.draw_landmarks(img, hand_landmarks, mp_hands.HAND_CONNECTIONS)
             
-            # Mouse control using index finger - only for right hand when both hands present
             if len(result.multi_hand_landmarks) == 1 or (right_hand_idx is not None and idx == right_hand_idx):
                 index_finger = hand_landmarks.landmark[8]
                 thumb_finger = hand_landmarks.landmark[4]
@@ -239,11 +213,9 @@ def hand_detection():
                 thumb_x = int(thumb_finger.x * frame_width)
                 thumb_y = int(thumb_finger.y * frame_height)
 
-                # Draw markers
                 cv.circle(img, (index_x, index_y), 10, (0, 255, 0), -1)
                 cv.circle(img, (thumb_x, thumb_y), 10, (0, 0, 255), -1)
 
-                # Mouse movement
                 screen_x = np.interp(index_x, (0, frame_width), (0, screen_width))
                 screen_y = np.interp(index_y, (0, frame_height), (0, screen_height))
                 
@@ -253,36 +225,30 @@ def hand_detection():
                 pyautogui.moveTo(curr_index_x, curr_index_y, duration=0.1)
                 prev_index_x, prev_index_y = curr_index_x, curr_index_y
 
-                # Click detection
                 distance = np.hypot(thumb_x - index_x, thumb_y - index_y)
-                if distance < 20:  # Increased threshold for better detection
+                if distance < 20:
                     pyautogui.click()
-                    time.sleep(0.3)  # Delay to prevent multiple clicks
+                    time.sleep(0.3)
 
-            # Detect fist gesture for clear all
             fingers = []
-            # Thumb detection
             hand_type = result.multi_handedness[idx].classification[0].label
             if hand_type == "Right":
                 fingers.append(1 if hand_landmarks.landmark[tipIds[0]].x < hand_landmarks.landmark[tipIds[0] - 1].x else 0)
             else:
                 fingers.append(1 if hand_landmarks.landmark[tipIds[0]].x > hand_landmarks.landmark[tipIds[0] - 1].x else 0)
 
-            # Other fingers detection
             for id in range(1, 5):
                 fingers.append(1 if hand_landmarks.landmark[tipIds[id]].y < hand_landmarks.landmark[tipIds[id] - 2].y else 0)
 
-            # If all fingers are closed (fist), clear all
             if sum(fingers) == 0:
                 clear_all()
-                time.sleep(0.5)  # Delay to prevent multiple clears
+                time.sleep(0.5)
 
             if detection_active and not detection_done:
                 totalFingers = fingers.count(1)
                 cv.putText(img, f"Fingers: {totalFingers}", (10, 70), cv.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 0), 2)
                 finger_count_label.config(text=f"Fingers Detected: {totalFingers}")
 
-    # Calculator operation logic
     if detection_active and detection_start_time is not None and not detection_done:
         elapsed_time = time.time() - detection_start_time
 
@@ -291,7 +257,6 @@ def hand_detection():
             detection_done = True
             finger_count_label.config(text="Please click Submit to continue")
             
-            # Perform arithmetic operation
             operation = "No operation performed."
             result_value = None
 
@@ -306,7 +271,7 @@ def hand_detection():
                 operation = f"Multiplication: {num1} * {num2} = {result_value}"
             elif totalFingers == 4:
                 if num2 != 0:
-                    result_value = round(num1 / num2, 2)  # Round to 2 decimal places
+                    result_value = round(num1 / num2, 2)
                     operation = f"Division: {num1} / {num2} = {result_value}"
                 else:
                     operation = "Division by zero is not allowed."
@@ -316,14 +281,12 @@ def hand_detection():
             engine.say(operation)
             engine.runAndWait()
 
-    # Update display
     img = Image.fromarray(rgb_frame)
     img = ImageTk.PhotoImage(image=img)
     video_label.img = img
     video_label.config(image=img)
     video_label.after(10, hand_detection)
 
-# Add Finger Operation List
 finger_operations_label = tk.Label(left_panel, text="Finger Count Operations:", font=("Helvetica", 12, "bold"), bg="lightgray")
 finger_operations_label.pack()
 
