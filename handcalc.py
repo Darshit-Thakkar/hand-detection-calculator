@@ -228,7 +228,7 @@ def hand_detection():
                 distance = np.hypot(thumb_x - index_x, thumb_y - index_y)
                 if distance < 20:
                     pyautogui.click()
-                    time.sleep(0.3)
+                    time.sleep(0.5)
 
             fingers = []
             hand_type = result.multi_handedness[idx].classification[0].label
